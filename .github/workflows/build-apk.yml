@@ -1,0 +1,43 @@
+name: Build APK
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: 17 }
+      - run: npm install
+      - name: Generate icon
+        run: |
+          pip install pillow
+          mkdir -p assets
+          python - <<'EOF'
+          from PIL import Image, ImageDraw
+          S = 1024
+          im = Image.new('RGB', (S, S))
+          px = im.load()
+          for y in range(S):
+              for x in range(S):
+                  t = (x + y) / (2 * S)
+                  px[x, y] = (int(124 - 90 * t), int(92 + 119 * t), int(255 - 17 * t))
+          d = ImageDraw.Draw(im)
+          d.rounded_rectangle((490, 230, 534, 794), 20, fill='white')
+          d.polygon([(422, 330), (422, 694), (132, 694)], fill='white')
+          d.polygon([(602, 330), (602, 694), (892, 694)], outline='white', width=34)
+          im.save('assets/icon-only.png')
+          EOF
+      - run: npx cap add android
+      - run: npx capacitor-assets generate --android --iconBackgroundColor '#0b0d14' --iconBackgroundColorDark '#0b0d14'
+      - run: npx cap sync android
+      - run: chmod +x gradlew && ./gradlew assembleDebug
+        working-directory: android
+      - uses: actions/upload-artifact@v4
+        with:
+          name: inikas-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
